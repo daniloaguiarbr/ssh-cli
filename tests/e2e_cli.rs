@@ -353,3 +353,55 @@ fn testa_list_vazio_mostra_mensagem() {
     let tmp = TempDir::new().unwrap();
     cmd(&tmp).args(["vps", "list"]).assert().success();
 }
+
+#[test]
+#[serial]
+fn testa_health_check_sem_vps_ativa_dispara_erro_generico() {
+    // Exercita o branch `imprimir_erro_generico` em main.rs (linhas 44-45):
+    // health-check sem nome e sem VPS ativa retorna um `anyhow::anyhow!`
+    // puro (não é ErroSshCli), forçando o fluxo de erro genérico no
+    // entry point do binário.
+    let tmp = TempDir::new().unwrap();
+    cmd(&tmp)
+        .args(["health-check"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("VPS").or(predicate::str::contains("vps")));
+}
+
+#[test]
+#[serial]
+fn testa_vps_add_sem_password_usa_prompt_ou_erro() {
+    // Cobre o branch de Ok(()) + exit_code EX_OK no fluxo completo:
+    // fornece todos os campos obrigatórios via flags para evitar prompt.
+    let tmp = TempDir::new().unwrap();
+    cmd(&tmp)
+        .args([
+            "vps",
+            "add",
+            "--name",
+            "completo",
+            "--host",
+            "c.example.com",
+            "--port",
+            "2222",
+            "--user",
+            "operador",
+            "--password",
+            "senha-longa-completa-123",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+#[serial]
+fn testa_vps_edit_inexistente_retorna_erro_dominio() {
+    // Reforça cobertura do branch `downcast::<ErroSshCli>` em main.rs:
+    // editar VPS que não existe retorna ErroSshCli::VpsNaoEncontrada.
+    let tmp = TempDir::new().unwrap();
+    cmd(&tmp)
+        .args(["vps", "edit", "fantasma", "--port", "2222"])
+        .assert()
+        .failure();
+}

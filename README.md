@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/ssh-cli.svg)](https://crates.io/crates/ssh-cli)
 [![docs.rs](https://docs.rs/ssh-cli/badge.svg)](https://docs.rs/ssh-cli)
-[![CI](https://github.com/comandoaguiar/ssh-cli/workflows/CI/badge.svg)](https://github.com/comandoaguiar/ssh-cli/actions)
+[![CI](https://github.com/daniloaguiarbr/ssh-cli/workflows/CI/badge.svg)](https://github.com/daniloaguiarbr/ssh-cli/actions)
 [![MSRV](https://img.shields.io/badge/MSRV-1.85.0-blue)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
 [![license](https://img.shields.io/crates/l/ssh-cli.svg)](LICENSE)
 
@@ -145,6 +145,61 @@ ssh-cli sudo-exec prod "systemctl restart nginx" --sudoPassword 'sudo-secret'
 - macOS Gatekeeper blocks the binary: run `xattr -d com.apple.quarantine /path/to/ssh-cli`
 - Alpine Linux or musl target: build with `--features musl-allocator`
 - Permission denied on `config.toml`: run `chmod 600 ~/.config/ssh-cli/config.toml`
+
+### Integration patterns
+
+Pipe-friendly examples for LLM agents, shell scripts, and CI pipelines.
+
+```bash
+# 1) LLM agent: execute command and parse JSON stdout via jaq
+ssh-cli exec prod "df -h /" --output-format json | jaq -r '.stdout'
+
+# 2) Shell script: health-check as a boolean gate
+ssh-cli health-check prod && echo "VPS reachable" || echo "VPS down"
+
+# 3) SCP with sysexits.h error classification
+ssh-cli scp upload prod ./deploy.tar /tmp/deploy.tar
+case $? in
+  0)  echo "upload OK" ;;
+  74) echo "I/O or SSH error" ;;
+  77) echo "auth rejected" ;;
+esac
+
+# 4) Runtime password override without touching the registry
+echo "$VAULT_PWD" | ssh-cli exec prod "systemctl status nginx" --password "$(cat)"
+
+# 5) Foreground tunnel with Ctrl+C cleanup (exit 130 on SIGINT)
+ssh-cli tunnel prod 8080 localhost 80
+
+# 6) Export registry snapshot as JSON for audit
+ssh-cli vps list --json | jaq '.[] | {name, host, port}'
+```
+
+### Quick Reference
+
+Top commands at a glance — consult tables above for full flag details.
+
+| Action | Command | Notes |
+|---|---|---|
+| Install | `cargo install ssh-cli` | Requires Rust 1.85+ |
+| Add VPS | `ssh-cli vps add --name X --host Y --user Z --password W` | Dedup by name |
+| List VPSs | `ssh-cli vps list --json` | Passwords masked |
+| Show VPS | `ssh-cli vps show <name>` | Unicode-safe masking |
+| Edit VPS | `ssh-cli vps edit <name> --host Z` | Any field |
+| Remove VPS | `ssh-cli vps remove <name>` | Irreversible |
+| Set active | `ssh-cli connect <name>` | Used by `health-check` |
+| Run command | `ssh-cli exec <vps> "<cmd>"` | stdout/stderr captured |
+| Run as sudo | `ssh-cli sudo-exec <vps> "<cmd>"` | `--sudoPassword` alias |
+| Upload file | `ssh-cli scp upload <vps> <local> <remote>` | SCP protocol |
+| Download file | `ssh-cli scp download <vps> <remote> <local>` | SCP protocol |
+| Port forward | `ssh-cli tunnel <vps> <lport> <rhost> <rport>` | Foreground, Ctrl+C to stop |
+| Health check | `ssh-cli health-check [<vps>]` | Uses active VPS if omitted |
+| JSON output | `--output-format json` (alias `--outputFormat`) | Available on `exec`, `vps list`, `vps show` |
+| Override timeout | `--timeout <ms>` | On `exec`, `sudo-exec` |
+| Force locale | `--lang en-US` or `--lang pt-BR` | Also via `SSH_CLI_LANG` |
+| Shell completions | `ssh-cli completions <shell>` | `bash`/`zsh`/`fish`/`powershell` |
+
+Full version history: see [CHANGELOG.md](CHANGELOG.md).
 
 ### License
 
@@ -289,6 +344,61 @@ ssh-cli sudo-exec producao "systemctl restart nginx" --sudoPassword 'segredo-sud
 - macOS Gatekeeper bloqueia o binário: execute `xattr -d com.apple.quarantine /caminho/para/ssh-cli`
 - Alpine Linux ou target musl: compile com `--features musl-allocator`
 - Permissão negada no `config.toml`: execute `chmod 600 ~/.config/ssh-cli/config.toml`
+
+### Padrões de integração
+
+Exemplos pipeable para agentes LLM, scripts shell e pipelines de CI.
+
+```bash
+# 1) Agente LLM: executa comando e parseia stdout JSON via jaq
+ssh-cli exec producao "df -h /" --output-format json | jaq -r '.stdout'
+
+# 2) Script shell: health-check como gate booleano
+ssh-cli health-check producao && echo "VPS acessível" || echo "VPS fora do ar"
+
+# 3) SCP com classificação de erro via sysexits.h
+ssh-cli scp upload producao ./deploy.tar /tmp/deploy.tar
+case $? in
+  0)  echo "upload OK" ;;
+  74) echo "erro de I/O ou SSH" ;;
+  77) echo "autenticação rejeitada" ;;
+esac
+
+# 4) Override de senha em runtime sem tocar no registro
+echo "$SENHA_VAULT" | ssh-cli exec producao "systemctl status nginx" --password "$(cat)"
+
+# 5) Tunnel em foreground com cleanup no Ctrl+C (exit 130 em SIGINT)
+ssh-cli tunnel producao 8080 localhost 80
+
+# 6) Exporta snapshot do registro em JSON para auditoria
+ssh-cli vps list --json | jaq '.[] | {name, host, port}'
+```
+
+### Referência rápida
+
+Comandos mais usados em uma visão única — consulte tabelas acima para flags completas.
+
+| Ação | Comando | Observações |
+|---|---|---|
+| Instalar | `cargo install ssh-cli` | Requer Rust 1.85+ |
+| Adicionar VPS | `ssh-cli vps add --name X --host Y --user Z --password W` | Deduplicação por nome |
+| Listar VPSs | `ssh-cli vps list --json` | Senhas mascaradas |
+| Mostrar VPS | `ssh-cli vps show <nome>` | Mascaramento Unicode-safe |
+| Editar VPS | `ssh-cli vps edit <nome> --host Z` | Qualquer campo |
+| Remover VPS | `ssh-cli vps remove <nome>` | Irreversível |
+| Definir ativa | `ssh-cli connect <nome>` | Usada por `health-check` |
+| Rodar comando | `ssh-cli exec <vps> "<cmd>"` | stdout/stderr capturados |
+| Rodar com sudo | `ssh-cli sudo-exec <vps> "<cmd>"` | Alias `--sudoPassword` |
+| Enviar arquivo | `ssh-cli scp upload <vps> <local> <remoto>` | Protocolo SCP |
+| Baixar arquivo | `ssh-cli scp download <vps> <remoto> <local>` | Protocolo SCP |
+| Port forward | `ssh-cli tunnel <vps> <plocal> <hremoto> <premoto>` | Foreground, Ctrl+C encerra |
+| Health check | `ssh-cli health-check [<vps>]` | Usa VPS ativa se omitida |
+| Saída JSON | `--output-format json` (alias `--outputFormat`) | Disponível em `exec`, `vps list`, `vps show` |
+| Override de timeout | `--timeout <ms>` | Em `exec`, `sudo-exec` |
+| Forçar idioma | `--lang en-US` ou `--lang pt-BR` | Também via `SSH_CLI_LANG` |
+| Completions | `ssh-cli completions <shell>` | `bash`/`zsh`/`fish`/`powershell` |
+
+Histórico completo de versões: veja [CHANGELOG.md](CHANGELOG.md).
 
 ### Licença
 

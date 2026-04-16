@@ -34,6 +34,36 @@ pub fn imprimir_erro(mensagem: &str) {
     eprintln!("{mensagem}");
 }
 
+/// Imprime erro de inicialização de runtime em stderr.
+///
+/// Emite no formato `erro ao criar runtime: {mensagem}` via stderr.
+/// Usada em `main.rs` para falhas de construção do runtime tokio ANTES
+/// de qualquer lógica async estar disponível.
+pub fn imprimir_erro_runtime(mensagem: &str) {
+    eprintln!("erro ao criar runtime: {mensagem}");
+}
+
+/// Imprime erro de domínio [`crate::erros::ErroSshCli`] em stderr.
+///
+/// Usa o `Display` do `thiserror` para emitir a mensagem canônica do erro.
+/// Chamada pelo `main.rs` após downcast de `anyhow::Error` para o tipo de
+/// domínio, preservando o contrato de mensagens definido em `errors.rs`.
+pub fn imprimir_erro_dominio(erro: &crate::erros::ErroSshCli) {
+    eprintln!("{erro}");
+}
+
+/// Imprime erro genérico `anyhow::Error` em stderr incluindo a cadeia de causas.
+///
+/// Emite primeiro a mensagem principal e, se houver, as causas encadeadas
+/// prefixadas por `  causado por: ` (uma por linha). Usada em `main.rs`
+/// como fallback quando o erro NÃO é um `ErroSshCli` conhecido.
+pub fn imprimir_erro_generico(erro: &anyhow::Error) {
+    eprintln!("{erro}");
+    for causa in erro.chain().skip(1) {
+        eprintln!("  causado por: {causa}");
+    }
+}
+
 /// Imprime lista de VPS em formato texto (mascarado).
 pub fn imprimir_lista_texto(registros: &[VpsRegistro]) {
     if registros.is_empty() {
@@ -441,5 +471,66 @@ mod testes {
             duracao_ms: 100,
         };
         imprimir_saida_execucao_json(&saida);
+    }
+
+    #[test]
+    fn imprimir_erro_runtime_nao_panica_com_mensagem_simples() {
+        imprimir_erro_runtime("falha ao bindar socket");
+    }
+
+    #[test]
+    fn imprimir_erro_runtime_nao_panica_com_mensagem_vazia() {
+        imprimir_erro_runtime("");
+    }
+
+    #[test]
+    fn imprimir_erro_runtime_nao_panica_com_unicode() {
+        imprimir_erro_runtime("erro acentuação: operação não concluída");
+    }
+
+    #[test]
+    fn imprimir_erro_dominio_nao_panica_com_variante_simples() {
+        let erro = crate::erros::ErroSshCli::VpsNaoEncontrada("producao".into());
+        imprimir_erro_dominio(&erro);
+    }
+
+    #[test]
+    fn imprimir_erro_dominio_nao_panica_com_variante_estruturada() {
+        let erro = crate::erros::ErroSshCli::ComandoFalhou {
+            exit_code: 127,
+            stderr: "command not found".into(),
+        };
+        imprimir_erro_dominio(&erro);
+    }
+
+    #[test]
+    fn imprimir_erro_dominio_nao_panica_com_autenticacao_falhou() {
+        let erro = crate::erros::ErroSshCli::AutenticacaoFalhou;
+        imprimir_erro_dominio(&erro);
+    }
+
+    #[test]
+    fn imprimir_erro_generico_nao_panica_com_erro_simples() {
+        let erro = anyhow::anyhow!("falha genérica no pipeline");
+        imprimir_erro_generico(&erro);
+    }
+
+    #[test]
+    fn imprimir_erro_generico_nao_panica_com_chain_de_causas() {
+        let raiz = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "acesso negado");
+        let intermediario = anyhow::Error::new(raiz).context("falha ao abrir socket");
+        let topo = intermediario.context("falha ao inicializar conexão");
+        imprimir_erro_generico(&topo);
+    }
+
+    #[test]
+    fn imprimir_erro_generico_com_chain_contem_multiplas_causas() {
+        let raiz = std::io::Error::new(std::io::ErrorKind::NotFound, "arquivo ausente");
+        let erro = anyhow::Error::new(raiz)
+            .context("falha ao carregar config")
+            .context("falha ao inicializar");
+        let total_causas = erro.chain().count();
+        assert!(total_causas >= 2);
+        imprimir_erro_generico(&erro);
     }
 }

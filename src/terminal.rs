@@ -78,6 +78,7 @@ fn determinar_cor(sem_cor_cli: bool) -> ColorChoice {
 #[cfg(test)]
 mod testes {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn sem_cor_cli_retorna_never() {
@@ -86,6 +87,7 @@ mod testes {
     }
 
     #[test]
+    #[serial]
     fn no_color_env_retorna_never() {
         // Salva e restaura o estado da variável de ambiente
         let anterior = std::env::var("NO_COLOR").ok();
@@ -109,6 +111,7 @@ mod testes {
     }
 
     #[test]
+    #[serial]
     fn clicolor_force_retorna_always() {
         let anterior = std::env::var("NO_COLOR").ok();
         let anterior_force = std::env::var("CLICOLOR_FORCE").ok();
@@ -142,5 +145,72 @@ mod testes {
     fn e_interativo_retorna_bool() {
         // Apenas verifica que não panic
         let _ = e_interativo();
+    }
+
+    #[test]
+    fn inicializar_com_sem_cor_true_nao_panica() {
+        // Exercita `inicializar()` que popula o OnceLock e emite debug log.
+        // O OnceLock pode já estar inicializado por testes anteriores —
+        // o teste apenas verifica ausência de panic, ignorando se set() falha.
+        let resultado = inicializar(true);
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    fn inicializar_com_sem_cor_false_nao_panica() {
+        // Segundo caminho de `inicializar()`: cobre o branch de delegação
+        // para `determinar_cor(false)` sem panicar.
+        let resultado = inicializar(false);
+        assert!(resultado.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn e_interativo_com_term_dumb_retorna_false() {
+        // Salva estado anterior da variável TERM
+        let anterior = std::env::var("TERM").ok();
+
+        std::env::set_var("TERM", "dumb");
+        let resultado = e_interativo();
+        assert!(!resultado, "TERM=dumb deve forçar modo não-interativo");
+
+        // Restaura estado anterior
+        match anterior {
+            Some(v) => std::env::set_var("TERM", v),
+            None => std::env::remove_var("TERM"),
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn determinar_cor_sem_env_vars_retorna_never_em_ambiente_nao_tty() {
+        // Em ambiente de teste, stdout não é TTY e NO_COLOR/CLICOLOR_FORCE
+        // estão ausentes — exercita o branch final de `determinar_cor`.
+        let anterior_no = std::env::var("NO_COLOR").ok();
+        let anterior_force = std::env::var("CLICOLOR_FORCE").ok();
+        let anterior_term = std::env::var("TERM").ok();
+
+        std::env::remove_var("NO_COLOR");
+        std::env::remove_var("CLICOLOR_FORCE");
+        std::env::set_var("TERM", "dumb");
+
+        let escolha = determinar_cor(false);
+        // TERM=dumb força e_interativo() a retornar false,
+        // portanto determinar_cor retorna Never.
+        assert!(matches!(escolha, ColorChoice::Never));
+
+        // Restaura
+        match anterior_no {
+            Some(v) => std::env::set_var("NO_COLOR", v),
+            None => std::env::remove_var("NO_COLOR"),
+        }
+        match anterior_force {
+            Some(v) => std::env::set_var("CLICOLOR_FORCE", v),
+            None => std::env::remove_var("CLICOLOR_FORCE"),
+        }
+        match anterior_term {
+            Some(v) => std::env::set_var("TERM", v),
+            None => std::env::remove_var("TERM"),
+        }
     }
 }

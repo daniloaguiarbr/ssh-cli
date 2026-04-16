@@ -530,6 +530,7 @@ pub async fn executar_health_check(
 #[cfg(test)]
 mod testes {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn arquivo_vazio_serializa_com_schema() {
@@ -807,6 +808,7 @@ adicionado_em = "2024-01-01T00:00:00Z"
     }
 
     #[tokio::test]
+    #[serial]
     async fn executar_exec_with_client_retorna_ok_quando_mock_sucesso() {
         use crate::ssh::cliente::mocks::MockClienteSsh;
         use crate::ssh::cliente::{ClienteSshTrait, SaidaExecucao};
@@ -845,6 +847,7 @@ adicionado_em = "2024-01-01T00:00:00Z"
     }
 
     #[tokio::test]
+    #[serial]
     async fn executar_sudo_exec_with_client_retorna_ok_quando_mock_sucesso() {
         use crate::ssh::cliente::mocks::MockClienteSsh;
         use crate::ssh::cliente::{ClienteSshTrait, SaidaExecucao};
@@ -889,6 +892,7 @@ adicionado_em = "2024-01-01T00:00:00Z"
     }
 
     #[tokio::test]
+    #[serial]
     async fn executar_sudo_exec_with_client_retorna_ok_quando_sem_senha_sudo() {
         use crate::ssh::cliente::mocks::MockClienteSsh;
         use crate::ssh::cliente::{ClienteSshTrait, SaidaExecucao};
@@ -1150,6 +1154,7 @@ adicionado_em = "2024-01-01T00:00:00Z"
     }
 
     #[test]
+    #[serial]
     fn caminho_config_padrao_com_ssh_cli_home_retorna_path() {
         let tmp = tempfile::TempDir::new().unwrap();
         let home_dir = tmp.path().join("ssh-cli-home");
@@ -1166,6 +1171,7 @@ adicionado_em = "2024-01-01T00:00:00Z"
     }
 
     #[test]
+    #[serial]
     fn caminho_config_padrao_com_path_traversal_retorna_erro() {
         std::env::set_var("SSH_CLI_HOME", "/tmp/../etc/config");
         let resultado = caminho_config_padrao();
@@ -1174,6 +1180,7 @@ adicionado_em = "2024-01-01T00:00:00Z"
     }
 
     #[test]
+    #[serial]
     fn caminho_config_padrao_sem_env_retorna_path_valido() {
         std::env::remove_var("SSH_CLI_HOME");
         let resultado = caminho_config_padrao();

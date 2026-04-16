@@ -13,7 +13,7 @@ fn main() {
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("erro ao criar runtime: {e}");
+            ssh_cli::output::imprimir_erro_runtime(&e.to_string());
             std::process::exit(ssh_cli::erros::exit_codes::EX_IOERR);
         }
     };
@@ -38,10 +38,10 @@ fn main() {
                 std::process::exit(ssh_cli::erros::exit_codes::EX_SIGINT);
             }
             if let Some(erro_ssh) = e.downcast_ref::<ssh_cli::erros::ErroSshCli>() {
-                eprintln!("{erro_ssh}");
+                ssh_cli::output::imprimir_erro_dominio(erro_ssh);
                 std::process::exit(erro_ssh.exit_code());
             }
-            eprintln!("{e}");
+            ssh_cli::output::imprimir_erro_generico(&e);
             std::process::exit(ssh_cli::erros::exit_codes::EX_GENERAL);
         }
     }
