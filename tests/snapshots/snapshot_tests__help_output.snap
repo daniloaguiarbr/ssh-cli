@@ -1,0 +1,49 @@
+---
+source: tests/snapshot_tests.rs
+expression: stdout
+---
+CLI Rust para LLMs operarem servidores via SSH.
+
+Usage: ssh-cli [OPTIONS] <COMMAND>
+
+Commands:
+  vps           Gerencia VPSs cadastradas (add, list, remove, edit, show, path)
+  connect       Define a VPS ativa (grava `active = "<NOME>"` no `config.toml`)
+  exec          Executa um comando na VPS via SSH (stdout/stderr capturados)
+  sudo-exec     Executa um comando com `sudo` na VPS via SSH
+  scp           Transferência de arquivos via SCP (upload/download)
+  tunnel        Cria um tunnel SSH (port-forward local)
+  health-check  Verifica conectividade SSH com uma VPS
+  completions   Gera completions de shell (bash, zsh, fish, powershell, elvish)
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+      --lang <LOCALE>
+          Força o idioma da CLI (ex.: `pt-BR`, `en-US`)
+
+  -v, --verbose
+          Aumenta a verbosidade de logs em stderr
+
+  -q, --quiet
+          Suprime output não-JSON (modo silencioso)
+
+      --config-dir <DIR>
+          Override do diretório de configuração (útil para testes)
+
+      --no-color
+          Desativa cores no output
+
+      --output-format <OUTPUT_FORMAT>
+          Formato global de saída (text, json)
+
+          Possible values:
+          - text: Texto legível por humanos (padrão)
+          - json: JSON estruturado
+          
+          [default: text]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

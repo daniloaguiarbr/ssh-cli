@@ -1,0 +1,10 @@
+[advisories]
+# RUSTSEC-2023-0071: transitiva via `russh`/`internal-russh-forked-ssh-key`.
+# Não há versão corrigida disponível no advisory no momento.
+# Reavaliar em toda atualização de `russh`.
+#
+# RUSTSEC-2026-0097: warning de unsound em `rand` transitivo via `pageant`.
+# Mantemos visível no relatório para monitorar correção upstream.
+ignore = [
+  "RUSTSEC-2023-0071",
+]

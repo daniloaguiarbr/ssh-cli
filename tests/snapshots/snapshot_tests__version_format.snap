@@ -1,0 +1,5 @@
+---
+source: tests/snapshot_tests.rs
+expression: stdout
+---
+ssh-cli 0.1.0 (unknown)

@@ -1,0 +1,134 @@
+[package]
+name = "ssh-cli"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85.0"
+default-run = "ssh-cli"
+description = "Native Rust CLI that gives LLMs (Claude Code, Cursor, Windsurf) the ability to operate remote servers via SSH over stdin/stdout"
+authors = ["Danilo <noreply@example.com>"]
+license = "MIT"
+repository = "https://github.com/comandoaguiar/ssh-cli"
+homepage = "https://github.com/comandoaguiar/ssh-cli"
+documentation = "https://docs.rs/ssh-cli"
+readme = "README.md"
+keywords = ["ssh", "cli", "llm", "automation", "devops"]
+categories = ["command-line-utilities", "network-programming"]
+exclude = [
+    ".serena/",
+    ".claude/",
+    "logs/",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "docs_rules/",
+    "projeto_ssh-cli.md",
+    ".github/",
+    "tests/fixtures/",
+    "ralph-loop.local.md",
+    "deny.toml",
+    "Cross.toml",
+    ".env",
+    ".env.*",
+    "*.profraw",
+    "*.profdata",
+    "coverage/",
+]
+
+[lib]
+name = "ssh_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ssh-cli"
+path = "src/main.rs"
+
+[dependencies]
+# Runtime assíncrono
+tokio = { version = "1.40", features = ["rt-multi-thread", "io-util", "io-std", "time", "sync", "macros", "fs", "net"] }
+
+# CLI e configuração
+clap = { version = "4.5", features = ["derive", "env", "unicode", "wrap_help"] }
+clap_complete = "4.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+directories = "5.0"
+
+# Internacionalização
+sys-locale = "0.3"
+
+# Sinalização e terminal
+ctrlc = { version = "3.4", features = ["termination"] }
+termcolor = "1.4"
+unicode-normalization = "0.1"
+
+# Alocador musl (ativado apenas com feature musl-allocator)
+mimalloc = { version = "0.1", optional = true }
+
+# Segurança de credenciais
+zeroize = { version = "1.8", features = ["derive"] }
+secrecy = { version = "0.10", features = ["serde"] }
+
+# Logs e erros
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Utilitários
+chrono = { version = "0.4", features = ["serde", "clock"] }
+
+# Async traits para permitir mocks em testes.
+async-trait = "0.1"
+
+# SSH real via russh (iteração 2).
+# `default-features = false` evita puxar `rsa` 0.9.x (RUSTSEC-2023-0071 Marvin Attack).
+# Ativamos apenas `aws-lc-rs` (crypto backend) e `flate2` (compressão zlib).
+# `russh` 0.60.x inclui `russh_keys` no módulo `russh::keys`.
+# MSRV 1.85 é requerido por russh >= 0.55.
+russh = { version = "0.60", default-features = false, features = ["aws-lc-rs", "flate2"], optional = true }
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console", "Win32_Foundation"] }
+
+[features]
+# SSH real é ATIVADO POR PADRÃO na iteração 2.
+# Para build sem russh (ex.: diagnóstico de deps), use `--no-default-features`.
+default = ["ssh-real"]
+# Ativa stack SSH real via russh + aws-lc-rs.
+ssh-real = ["dep:russh"]
+# Ativa mimalloc como alocador global (útil em builds musl para performance).
+musl-allocator = ["dep:mimalloc"]
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.13"
+serial_test = "3.1"
+mockall = "0.13"
+async-trait = "0.1"
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.5"
+insta = { version = "1.39", features = ["json", "redactions"] }
+
+[[bench]]
+name = "ssh_operations"
+harness = false
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+panic = "unwind"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

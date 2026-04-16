@@ -1,0 +1,48 @@
+# Artefatos de build
+target/
+Cargo.lock.bak
+*.rs.bk
+
+# Logs
+logs/
+*.log
+
+# Secrets
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+known_hosts
+
+# Privado de desenvolvimento
+.serena/
+.claude/
+CLAUDE.md
+docs_rules/
+projeto_ssh-cli.md
+.cursor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Cobertura LLVM
+*.profraw
+*.profdata
+coverage/
+lcov.info
+
+# Ralph loop
+.claude/ralph-loop.local.md
+ralph-loop.local.md
+
+# Privado de desenvolvimento
+AGENTS.md
+deny.toml
+Cross.toml

@@ -1,0 +1,15 @@
+.serena/
+.claude/
+docs_rules/
+AGENTS.md
+CLAUDE.md
+ralph-loop.local.md
+.env
+.env.*
+logs/
+*.log
+*.profraw
+*.profdata
+coverage/
+deny.toml
+Cross.toml

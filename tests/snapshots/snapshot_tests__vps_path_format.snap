@@ -1,0 +1,5 @@
+---
+source: tests/snapshot_tests.rs
+expression: redacted
+---
+[CONFIG_DIR]/config.toml
