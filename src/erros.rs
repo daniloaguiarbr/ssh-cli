@@ -120,6 +120,47 @@ pub mod exit_codes {
 }
 
 impl ErroSshCli {
+    /// Retorna a mensagem do erro traduzida via i18n com base no idioma global.
+    ///
+    /// Mapeia variantes do erro para a enum [`crate::i18n::Mensagem`] quando
+    /// há tradução disponível e retorna o texto no idioma atual. Variantes
+    /// sem mapeamento i18n caem no `Display` padrão gerado por `thiserror`.
+    ///
+    /// Essa função é o ÚNICO ponto autorizado a converter erros do domínio
+    /// em texto de UI, garantindo que a camada [`crate::i18n`] seja consultada
+    /// no path de erro e a precedência `--lang` > `SSH_CLI_LANG` > locale seja
+    /// respeitada na saída final ao usuário.
+    #[must_use]
+    pub fn mensagem_i18n(&self) -> String {
+        use crate::i18n::{t, Mensagem};
+        match self {
+            Self::VpsNaoEncontrada(nome) => t(Mensagem::VpsNaoEncontrada { nome: nome.clone() }),
+            Self::VpsDuplicada(nome) => t(Mensagem::VpsDuplicada { nome: nome.clone() }),
+            Self::ArgumentoInvalido(detalhe) => t(Mensagem::ErroArgumentoInvalido {
+                detalhe: detalhe.clone(),
+            }),
+            Self::ConexaoSsh(detalhe)
+            | Self::AutenticacaoSsh(detalhe)
+            | Self::ConexaoFalhou(detalhe)
+            | Self::CanalFalhou(detalhe) => t(Mensagem::ErroGenerico {
+                detalhe: format!("{}: {detalhe}", t(Mensagem::ErroConexaoSsh)),
+            }),
+            Self::AutenticacaoFalhou => t(Mensagem::ErroConexaoSsh),
+            Self::ComandoFalhou { exit_code, stderr } => t(Mensagem::ErroGenerico {
+                detalhe: format!(
+                    "{} (exit={exit_code}): {stderr}",
+                    t(Mensagem::ErroComandoFalhou)
+                ),
+            }),
+            Self::TimeoutSsh(ms) | Self::Timeout(ms) => t(Mensagem::ErroGenerico {
+                detalhe: format!("timeout: {ms}ms"),
+            }),
+            // Variantes sem mapeamento específico: recorre ao Display padrão
+            // (preserva comportamento para tipos de erro técnicos como Io/Json/Toml).
+            _ => self.to_string(),
+        }
+    }
+
     /// Retorna o exit code sysexits.h correspondente a este erro.
     #[must_use]
     pub fn exit_code(&self) -> i32 {

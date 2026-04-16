@@ -2,8 +2,24 @@
 //!
 //! Testa as funções públicas do módulo i18n e locale.
 
+use assert_cmd::Command;
+use predicates::prelude::*;
 use serial_test::serial;
 use ssh_cli::i18n::{idioma_atual, inicializar_idioma, Idioma, Mensagem};
+use tempfile::TempDir;
+
+/// Constrói um `Command` isolado apontando para um `TempDir` como
+/// raiz de configuração. Herda apenas `PATH` do ambiente real e
+/// remove qualquer `SSH_CLI_LANG` herdado da sessão do usuário.
+fn cmd_isolado(tmp: &TempDir) -> Command {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ssh-cli"));
+    c.env_clear();
+    c.env("PATH", std::env::var_os("PATH").unwrap_or_default());
+    c.env("HOME", tmp.path());
+    c.env("XDG_CONFIG_HOME", tmp.path());
+    c.arg("--config-dir").arg(tmp.path());
+    c
+}
 
 #[test]
 #[serial]
@@ -213,4 +229,65 @@ fn tunnel_ativo_inclui_porta_host_e_vps() {
         assert!(texto.contains("22"), "deve conter porta_remota");
         assert!(texto.contains("relay-01"), "deve conter vps_nome");
     }
+}
+
+// -----------------------------------------------------------------------------
+// Regressão do Bug B1-alt:
+// A flag `--lang` e a env `SSH_CLI_LANG` devem propagar o idioma escolhido
+// até a mensagem final de erro emitida em stderr. Antes do fix, as mensagens
+// de `ErroSshCli` eram hardcoded em PT via `#[error("...")]`, ignorando a
+// camada i18n e a precedência de `--lang` > env > sys_locale > English.
+// -----------------------------------------------------------------------------
+
+#[test]
+#[serial]
+fn test_lang_en_override_forca_ingles_em_erro_vps_nao_encontrada() {
+    let tmp = TempDir::new().unwrap();
+    cmd_isolado(&tmp)
+        .args(["--lang", "en", "vps", "show", "naoexiste"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"))
+        .stderr(predicate::str::contains("naoexiste"))
+        .stderr(predicate::str::contains("não encontrada").not());
+}
+
+#[test]
+#[serial]
+fn test_lang_pt_override_forca_portugues_em_erro_vps_nao_encontrada() {
+    let tmp = TempDir::new().unwrap();
+    cmd_isolado(&tmp)
+        .args(["--lang", "pt", "vps", "show", "naoexiste"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("não encontrada"))
+        .stderr(predicate::str::contains("naoexiste"))
+        .stderr(predicate::str::contains("not found").not());
+}
+
+#[test]
+#[serial]
+fn test_ssh_cli_lang_env_override_forca_ingles_em_erro() {
+    let tmp = TempDir::new().unwrap();
+    cmd_isolado(&tmp)
+        .env("SSH_CLI_LANG", "en")
+        .args(["vps", "show", "naoexiste"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"))
+        .stderr(predicate::str::contains("naoexiste"))
+        .stderr(predicate::str::contains("não encontrada").not());
+}
+
+#[test]
+#[serial]
+fn test_lang_flag_tem_precedencia_sobre_env() {
+    let tmp = TempDir::new().unwrap();
+    cmd_isolado(&tmp)
+        .env("SSH_CLI_LANG", "pt")
+        .args(["--lang", "en", "vps", "show", "naoexiste"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"))
+        .stderr(predicate::str::contains("não encontrada").not());
 }

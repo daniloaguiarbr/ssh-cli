@@ -153,7 +153,7 @@ fn aplicar_overrides(
 pub async fn executar_comando_vps(
     acao: AcaoVps,
     config_override: Option<PathBuf>,
-    _formato: FormatoSaida,
+    formato: FormatoSaida,
 ) -> Result<()> {
     let caminho = resolver_caminho_config(config_override)?;
 
@@ -195,7 +195,7 @@ pub async fn executar_comando_vps(
         AcaoVps::List { json } => {
             let arquivo = carregar(&caminho)?;
             let registros: Vec<_> = arquivo.hosts.values().cloned().collect();
-            if json {
+            if formato == FormatoSaida::Json || json {
                 crate::output::imprimir_lista_json(&registros);
             } else {
                 crate::output::imprimir_lista_texto(&registros);
@@ -258,7 +258,7 @@ pub async fn executar_comando_vps(
                 .hosts
                 .get(&nome)
                 .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(nome.clone()))?;
-            if json {
+            if formato == FormatoSaida::Json || json {
                 crate::output::imprimir_detalhes_json(registro);
             } else {
                 crate::output::imprimir_detalhes_texto(registro);

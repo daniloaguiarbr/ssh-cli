@@ -405,3 +405,89 @@ fn testa_vps_edit_inexistente_retorna_erro_dominio() {
         .assert()
         .failure();
 }
+
+// ---------------------------------------------------------------------------
+// Bug C2: `--output-format json vps list` com registro vazio emitia texto
+// humano ("Nenhum VPS cadastrado.") quebrando parsers LLM. Os dois testes
+// abaixo travam o contrato: a flag global `--output-format json` sempre
+// produz JSON parseável, independentemente de haver VPSs cadastradas.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[serial]
+fn testa_vps_list_vazia_com_output_format_json_retorna_array_vazio() {
+    let tmp = TempDir::new().unwrap();
+    let saida = cmd(&tmp)
+        .args(["--output-format", "json", "vps", "list"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8(saida).expect("stdout deve ser UTF-8 válido");
+    let valor: serde_json::Value = serde_json::from_str(stdout.trim())
+        .expect("stdout deve ser JSON válido mesmo com registro vazio");
+    let arr = valor
+        .as_array()
+        .expect("modo json deve retornar array JSON na raiz");
+    assert!(
+        arr.is_empty(),
+        "lista vazia deve serializar como [] mas veio {arr:?}"
+    );
+}
+
+#[test]
+#[serial]
+fn testa_vps_list_com_uma_vps_output_format_json_mascara_senha() {
+    let tmp = TempDir::new().unwrap();
+    cmd(&tmp)
+        .args([
+            "vps",
+            "add",
+            "--name",
+            "producao",
+            "--host",
+            "10.0.0.1",
+            "--port",
+            "22",
+            "--user",
+            "deploy",
+            "--password",
+            "senha-super-secreta-que-deve-ser-mascarada",
+        ])
+        .assert()
+        .success();
+
+    let saida = cmd(&tmp)
+        .args(["--output-format", "json", "vps", "list"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stdout = String::from_utf8(saida).expect("stdout deve ser UTF-8 válido");
+    let valor: serde_json::Value =
+        serde_json::from_str(stdout.trim()).expect("stdout deve ser JSON válido");
+    let arr = valor
+        .as_array()
+        .expect("modo json deve retornar array JSON na raiz");
+    assert_eq!(arr.len(), 1, "deve conter exatamente 1 VPS cadastrada");
+
+    let registro = &arr[0];
+    assert_eq!(registro["name"], "producao");
+    assert_eq!(registro["host"], "10.0.0.1");
+    assert_eq!(registro["port"], 22);
+    assert_eq!(registro["user"], "deploy");
+
+    let senha_mascarada = registro["password"]
+        .as_str()
+        .expect("password deve ser string mascarada");
+    assert!(
+        !senha_mascarada.contains("senha-super-secreta"),
+        "senha plain NUNCA pode aparecer no JSON: {senha_mascarada}"
+    );
+    assert!(
+        senha_mascarada.contains("...") || senha_mascarada == "***",
+        "senha deve usar padrão de mascaramento conhecido: {senha_mascarada}"
+    );
+}

@@ -2,4 +2,4 @@
 source: tests/snapshot_tests.rs
 expression: saida
 ---
-VPS 'nao-existe' não encontrada no registro
+VPS 'nao-existe' not found.

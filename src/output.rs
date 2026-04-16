@@ -49,7 +49,7 @@ pub fn imprimir_erro_runtime(mensagem: &str) {
 /// Chamada pelo `main.rs` após downcast de `anyhow::Error` para o tipo de
 /// domínio, preservando o contrato de mensagens definido em `errors.rs`.
 pub fn imprimir_erro_dominio(erro: &crate::erros::ErroSshCli) {
-    eprintln!("{erro}");
+    eprintln!("{}", erro.mensagem_i18n());
 }
 
 /// Imprime erro genérico `anyhow::Error` em stderr incluindo a cadeia de causas.

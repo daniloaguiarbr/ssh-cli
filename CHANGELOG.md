@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-16
+
+### Fixed
+- `--output-format json vps list` with an empty registry now returns a valid JSON array (`[]`) instead of the localized text "Nenhum VPS cadastrado." The global `--output-format` flag was being silently ignored in `executar_comando_vps` (the `_formato` parameter was prefixed with underscore). This fix restores the LLM-automation contract that `--output-format json` always yields parseable JSON on stdout, regardless of whether the list is empty or populated.
+- `--lang en` and `SSH_CLI_LANG=en` now properly force English in `ErroSshCli` error messages routed to stderr. Previously all `thiserror` `#[error("...")]` attributes were hardcoded in Portuguese, bypassing the i18n layer entirely. Added `ErroSshCli::mensagem_i18n()` method that maps every domain error variant to the corresponding `Mensagem` enum and consults `i18n::t()` at display time. `imprimir_erro_dominio` now calls this method instead of `Display`. Layer 1 (`--lang` flag) > Layer 2 (`SSH_CLI_LANG` env) > Layer 3 (`sys_locale`) > Layer 4 (English) precedence is now correctly applied to error paths.
+
+### Added
+- 6 new end-to-end regression tests: 2 for JSON-output contract (`testa_vps_list_vazia_com_output_format_json_retorna_array_vazio`, `testa_vps_list_com_uma_vps_output_format_json_mascara_senha`) and 4 for i18n override precedence (`test_lang_en_override_forca_ingles_em_erro_vps_nao_encontrada`, `test_lang_pt_override_forca_portugues_em_erro_vps_nao_encontrada`, `test_ssh_cli_lang_env_override_forca_ingles_em_erro`, `test_lang_flag_tem_precedencia_sobre_env`).
+
 ## [0.3.0] - 2026-04-16
 
 ### Added
@@ -75,7 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config file receives `chmod 0o600` immediately after every write on Unix.
 - `SSH_CLI_HOME` rejects any value containing `..` to prevent path traversal attacks.
 
-[Unreleased]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.1.0...v0.2.0
