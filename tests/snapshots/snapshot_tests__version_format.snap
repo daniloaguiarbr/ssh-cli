@@ -1,5 +1,5 @@
 ---
 source: tests/snapshot_tests.rs
-expression: stdout
+expression: redacted
 ---
-ssh-cli 0.1.0 (unknown)
+ssh-cli 0.1.0 (HASH)

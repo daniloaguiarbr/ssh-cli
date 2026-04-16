@@ -58,7 +58,17 @@ fn snapshot_version_format() {
     let tmp = TempDir::new().unwrap();
     let output = cmd(&tmp).arg("--version").output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    insta::assert_snapshot!("version_format", stdout);
+    // Redact o commit hash que varia por commit — ex: "ssh-cli 0.1.0 (a1b2c3d)\n" -> "ssh-cli 0.1.0 (HASH)\n"
+    let redacted = if let Some(start) = stdout.find('(') {
+        if let Some(end) = stdout.find(')') {
+            format!("{}(HASH){}", &stdout[..start], &stdout[end + 1..])
+        } else {
+            stdout
+        }
+    } else {
+        stdout
+    };
+    insta::assert_snapshot!("version_format", redacted);
 }
 
 #[test]
