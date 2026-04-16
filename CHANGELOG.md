@@ -32,9 +32,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config file receives `chmod 600` immediately after every write.
 - `SSH_CLI_HOME` rejects any value containing `..` to prevent path traversal.
 
+## [0.2.1] - 2026-04-16
+
+### Fixed
+- Pin `elliptic-curve = "=0.14.0-rc.30"` to fix `cargo install ssh-cli` failure caused by incompatible `elliptic-curve 0.14.0-rc.31+` being resolved for `p256/p384/p521 0.14.0-rc.8`
+
+## [0.2.0] - 2026-04-15
+
+### Added
+- Fix sudo-exec stdin password piping with `printf '%s\n'`
+- Runtime overrides: --password, --sudo-password, --timeout flags on exec/sudo-exec/scp/tunnel
+- LLM-friendly camelCase aliases (--sudoPassword, --suPassword)
+
 ## [0.1.0] - 2026-04-14
 
 Initial release.
 
-[Unreleased]: https://github.com/comandoaguiar/ssh-cli/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/comandoaguiar/ssh-cli/releases/tag/v0.1.0
+[Unreleased]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/daniloaguiarbr/ssh-cli/releases/tag/v0.1.0

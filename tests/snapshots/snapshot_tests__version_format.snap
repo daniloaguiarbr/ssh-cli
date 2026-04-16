@@ -2,4 +2,4 @@
 source: tests/snapshot_tests.rs
 expression: redacted
 ---
-ssh-cli 0.1.0 (HASH)
+ssh-cli 0.2.1 (HASH)

@@ -1,6 +1,6 @@
 [package]
 name = "ssh-cli"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.85.0"
 default-run = "ssh-cli"
@@ -86,6 +86,12 @@ async-trait = "0.1"
 # `russh` 0.60.x inclui `russh_keys` no módulo `russh::keys`.
 # MSRV 1.85 é requerido por russh >= 0.55.
 russh = { version = "0.60", default-features = false, features = ["aws-lc-rs", "flate2"], optional = true }
+
+# COMPAT PIN: russh 0.60 depende de p256/p384/p521 0.14.0-rc.8 que NÃO implementam
+# MulVartime/MulByGeneratorVartime introduzidos em elliptic-curve 0.14.0-rc.31+.
+# Sem este pin, `cargo install` resolve rc.31+ e falha ao compilar a cadeia crypto.
+# Remover quando russh atualizar para p256/p384/p521 compatíveis com rc.31+.
+elliptic-curve = "=0.14.0-rc.30"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"

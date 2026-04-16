@@ -119,6 +119,19 @@ jobs:
       - name: Build with musl-allocator
         run: cargo build --release --target x86_64-unknown-linux-musl --features musl-allocator
 
+  install-simulation:
+    name: cargo install simulation (unlocked)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Remove lock file to simulate fresh cargo install
+        run: rm Cargo.lock
+      - name: Build without lock (simulates cargo install)
+        run: cargo build --all-features
+
   commit-check:
     name: Block AI co-authored-by
     runs-on: ubuntu-latest
