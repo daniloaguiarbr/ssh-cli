@@ -111,6 +111,44 @@ fn aplicar_permissoes_600(_caminho: &PathBuf) -> ResultadoSshCli<()> {
     Ok(())
 }
 
+/// Escapa uma string para uso seguro dentro de single quotes no shell.
+///
+/// Estratégia: envolve em single quotes e escapa single quotes internas
+/// com a sequência `'\''` (fecha quote, backslash-quote, abre quote).
+fn escapar_senha_shell(valor: &str) -> String {
+    let mut resultado = String::with_capacity(valor.len() + 2);
+    resultado.push('\'');
+    for ch in valor.chars() {
+        if ch == '\'' {
+            resultado.push_str("'\\''");
+        } else {
+            resultado.push(ch);
+        }
+    }
+    resultado.push('\'');
+    resultado
+}
+
+/// Aplica overrides de runtime sobre um VpsRegistro clonado.
+///
+/// Campos fornecidos pelo CLI em runtime PREVALECEM sobre valores armazenados.
+fn aplicar_overrides(
+    vps: &mut VpsRegistro,
+    password_override: Option<String>,
+    sudo_password_override: Option<String>,
+    timeout_override: Option<u64>,
+) {
+    if let Some(pwd) = password_override {
+        vps.senha = secrecy::SecretString::from(pwd);
+    }
+    if let Some(spwd) = sudo_password_override {
+        vps.senha_sudo = Some(secrecy::SecretString::from(spwd));
+    }
+    if let Some(t) = timeout_override {
+        vps.timeout_ms = t;
+    }
+}
+
 /// Dispatcher dos subcomandos `vps`.
 pub async fn executar_comando_vps(
     acao: AcaoVps,
@@ -291,7 +329,7 @@ fn parse_max_chars(s: &str) -> usize {
 }
 
 /// Constrói `ConfiguracaoConexao` a partir de um `VpsRegistro`.
-fn construir_configuracao(vps: &VpsRegistro) -> ConfiguracaoConexao {
+pub fn construir_configuracao(vps: &VpsRegistro) -> ConfiguracaoConexao {
     ConfiguracaoConexao {
         host: vps.host.clone(),
         porta: vps.porta,
@@ -308,6 +346,8 @@ pub async fn executar_exec(
     config_override: Option<PathBuf>,
     formato: FormatoSaida,
     json: bool,
+    password_override: Option<String>,
+    timeout_override: Option<u64>,
 ) -> Result<()> {
     if crate::signals::cancelado() || crate::signals::terminado() {
         return Err(anyhow::anyhow!(crate::i18n::t(
@@ -316,14 +356,16 @@ pub async fn executar_exec(
     }
     let caminho = resolver_caminho_config(config_override)?;
     let arquivo = carregar(&caminho)?;
-    let vps = arquivo
+    let vps_base = arquivo
         .hosts
         .get(vps_nome)
         .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(vps_nome.to_string()))?;
 
-    let cfg = construir_configuracao(vps);
+    let mut vps = vps_base.clone();
+    aplicar_overrides(&mut vps, password_override, None, timeout_override);
+    let cfg = construir_configuracao(&vps);
     let cliente: Box<dyn ClienteSshTrait> = <ClienteSsh as ClienteSshTrait>::conectar(cfg).await?;
-    executar_exec_with_client(vps, comando, cliente, formato, json).await
+    executar_exec_with_client(&vps, comando, cliente, formato, json).await
 }
 
 /// Versão testável de executar_exec que aceita o cliente como parâmetro.
@@ -360,17 +402,20 @@ pub async fn executar_exec_with_client(
 
 /// Executa um comando com `sudo` em uma VPS via SSH.
 ///
-/// Se a VPS tiver `senha_sudo` definida, o comando será executado prefixado com
-/// `sudo -S` que tenta ler a senha do stdin. Caso contrário, usa `sudo -k -s`.
-/// Nota: a implementação atual de stdin do russh é limitada; esta função
-/// funciona melhor quando sudo está configurado como NOPASSWD ou quando a senha
-/// sudo é fornecida via variável de ambiente do remote shell.
+/// Se a VPS tiver `senha_sudo` definida (ou `sudo_password_override` for fornecido),
+/// o comando é executado via `printf '%s\n' <senha> | sudo -S -p '' <cmd>`,
+/// que injeta a senha no stdin do sudo sem expô-la nos argumentos do processo.
+/// Caso contrário, usa `sudo <cmd>` assumindo NOPASSWD configurado.
+#[allow(clippy::too_many_arguments)]
 pub async fn executar_sudo_exec(
     vps_nome: &str,
     comando: &str,
     config_override: Option<PathBuf>,
     formato: FormatoSaida,
     json: bool,
+    password_override: Option<String>,
+    sudo_password_override: Option<String>,
+    timeout_override: Option<u64>,
 ) -> Result<()> {
     if crate::signals::cancelado() || crate::signals::terminado() {
         return Err(anyhow::anyhow!(crate::i18n::t(
@@ -379,14 +424,21 @@ pub async fn executar_sudo_exec(
     }
     let caminho = resolver_caminho_config(config_override)?;
     let arquivo = carregar(&caminho)?;
-    let vps = arquivo
+    let vps_base = arquivo
         .hosts
         .get(vps_nome)
         .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(vps_nome.to_string()))?;
 
-    let cfg = construir_configuracao(vps);
+    let mut vps = vps_base.clone();
+    aplicar_overrides(
+        &mut vps,
+        password_override,
+        sudo_password_override,
+        timeout_override,
+    );
+    let cfg = construir_configuracao(&vps);
     let cliente: Box<dyn ClienteSshTrait> = <ClienteSsh as ClienteSshTrait>::conectar(cfg).await?;
-    executar_sudo_exec_with_client(vps, comando, cliente, formato, json).await
+    executar_sudo_exec_with_client(&vps, comando, cliente, formato, json).await
 }
 
 /// Versão testável de executar_sudo_exec que aceita o cliente como parâmetro.
@@ -402,13 +454,12 @@ pub async fn executar_sudo_exec_with_client(
             crate::i18n::Mensagem::OperacaoCancelada
         )));
     }
-    let sudo_cmd = if vps.senha_sudo.is_some() {
-        format!(
-            "sudo -S {} 2>/dev/null || sudo {} 2>/dev/null || {}",
-            comando, comando, comando
-        )
+    let sudo_cmd = if let Some(ref senha) = vps.senha_sudo {
+        use secrecy::ExposeSecret;
+        let escaped = escapar_senha_shell(senha.expose_secret());
+        format!("printf '%s\\n' {} | sudo -S -p '' {}", escaped, comando)
     } else {
-        format!("sudo -k -s {} 2>/dev/null || {}", comando, comando)
+        format!("sudo {}", comando)
     };
 
     let saida = cliente.executar_comando(&sudo_cmd, vps.max_chars).await?;
@@ -437,6 +488,7 @@ pub async fn executar_health_check(
     vps_nome: Option<&str>,
     config_override: Option<PathBuf>,
     formato: FormatoSaida,
+    password_override: Option<String>,
 ) -> Result<()> {
     if crate::signals::cancelado() || crate::signals::terminado() {
         return Err(anyhow::anyhow!(crate::i18n::t(
@@ -454,12 +506,14 @@ pub async fn executar_health_check(
     };
     let caminho = resolver_caminho_config(config_override)?;
     let arquivo = carregar(&caminho)?;
-    let vps = arquivo
+    let vps_base = arquivo
         .hosts
         .get(&nome_resolvido)
         .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(nome_resolvido.clone()))?;
 
-    let cfg = construir_configuracao(vps);
+    let mut vps = vps_base.clone();
+    aplicar_overrides(&mut vps, password_override, None, None);
+    let cfg = construir_configuracao(&vps);
     let inicio = std::time::Instant::now();
     let cliente: Box<dyn ClienteSshTrait> = <ClienteSsh as ClienteSshTrait>::conectar(cfg).await?;
     let latencia_ms = inicio.elapsed().as_millis() as u64;
@@ -1126,6 +1180,111 @@ adicionado_em = "2024-01-01T00:00:00Z"
         if let Ok(path) = resultado {
             assert!(path.to_str().unwrap().contains("ssh-cli"));
         }
+    }
+
+    #[test]
+    fn escapar_senha_shell_simples() {
+        assert_eq!(escapar_senha_shell("abc123"), "'abc123'");
+    }
+
+    #[test]
+    fn escapar_senha_shell_com_single_quote() {
+        assert_eq!(escapar_senha_shell("ab'cd"), "'ab'\\''cd'");
+    }
+
+    #[test]
+    fn escapar_senha_shell_com_especiais() {
+        // $, @, ~, !, ` são seguros dentro de single quotes
+        assert_eq!(escapar_senha_shell("p@ss$w0rd!"), "'p@ss$w0rd!'");
+    }
+
+    #[test]
+    fn escapar_senha_shell_vazia() {
+        assert_eq!(escapar_senha_shell(""), "''");
+    }
+
+    #[test]
+    fn escapar_senha_shell_unicode() {
+        assert_eq!(escapar_senha_shell("café☕"), "'café☕'");
+    }
+
+    #[test]
+    fn escapar_senha_shell_senha_usuario() {
+        // Senha real do caso de uso
+        assert_eq!(
+            escapar_senha_shell("Ih8Tml@Ymnwku1:G@W~2"),
+            "'Ih8Tml@Ymnwku1:G@W~2'"
+        );
+    }
+
+    #[test]
+    fn sudo_cmd_com_senha_formato_correto() {
+        let senha = "test123";
+        let comando = "apt update";
+        let escaped = escapar_senha_shell(senha);
+        let sudo_cmd = format!("printf '%s\\n' {} | sudo -S -p '' {}", escaped, comando);
+        assert_eq!(
+            sudo_cmd,
+            "printf '%s\\n' 'test123' | sudo -S -p '' apt update"
+        );
+    }
+
+    #[test]
+    fn sudo_cmd_sem_senha_formato_correto() {
+        let comando = "apt update";
+        let sudo_cmd = format!("sudo {}", comando);
+        assert_eq!(sudo_cmd, "sudo apt update");
+    }
+
+    #[test]
+    fn aplicar_overrides_com_todos_os_campos() {
+        use secrecy::ExposeSecret;
+        let mut vps = modelo::VpsRegistro::novo(
+            "srv".into(),
+            "1.2.3.4".into(),
+            22,
+            "root".into(),
+            SecretString::from("senha_original".to_string()),
+            Some(30_000),
+            Some(50_000),
+            None,
+            None,
+        );
+        aplicar_overrides(
+            &mut vps,
+            Some("nova_senha".to_string()),
+            Some("nova_sudo".to_string()),
+            Some(60_000),
+        );
+        assert_eq!(vps.senha.expose_secret(), "nova_senha");
+        assert_eq!(
+            vps.senha_sudo.as_ref().unwrap().expose_secret(),
+            "nova_sudo"
+        );
+        assert_eq!(vps.timeout_ms, 60_000);
+    }
+
+    #[test]
+    fn aplicar_overrides_preserva_campos_quando_none() {
+        use secrecy::ExposeSecret;
+        let mut vps = modelo::VpsRegistro::novo(
+            "srv".into(),
+            "1.2.3.4".into(),
+            22,
+            "root".into(),
+            SecretString::from("senha_original".to_string()),
+            Some(30_000),
+            Some(50_000),
+            Some(SecretString::from("sudo_original".to_string())),
+            None,
+        );
+        aplicar_overrides(&mut vps, None, None, None);
+        assert_eq!(vps.senha.expose_secret(), "senha_original");
+        assert_eq!(
+            vps.senha_sudo.as_ref().unwrap().expose_secret(),
+            "sudo_original"
+        );
+        assert_eq!(vps.timeout_ms, 30_000);
     }
 
     #[test]

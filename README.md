@@ -66,6 +66,40 @@ ssh-cli exec prod "hostname"
 | `ssh-cli health-check [<vps>]` | Verify SSH connectivity (uses active VPS if omitted) |
 | `ssh-cli completions <shell>` | Print shell completions to stdout |
 
+### Runtime Override Flags
+
+Override stored credentials per-invocation without modifying the VPS registry.
+These flags take precedence over values saved with `vps add` or `vps edit`.
+
+| Command | Flag | Purpose |
+|---|---|---|
+| `exec` | `--password <PWD>` | Override the SSH password for this invocation |
+| `exec` | `--timeout <MS>` | Override the command timeout in milliseconds |
+| `sudo-exec` | `--password <PWD>` | Override the SSH password |
+| `sudo-exec` | `--sudo-password <PWD>` | Override the sudo password (alias: `--sudoPassword`) |
+| `sudo-exec` | `--timeout <MS>` | Override the command timeout in milliseconds |
+| `scp upload` | `--password <PWD>` | Override the SSH password |
+| `scp download` | `--password <PWD>` | Override the SSH password |
+| `tunnel` | `--password <PWD>` | Override the SSH password |
+| `health-check` | `--password <PWD>` | Override the SSH password |
+
+#### LLM-Friendly camelCase Aliases
+
+All multi-word flags accept camelCase aliases for natural LLM usage:
+
+| Canonical flag | camelCase alias |
+|---|---|
+| `--sudo-password` | `--sudoPassword` |
+| `--config-dir` | `--configDir` |
+| `--output-format` | `--outputFormat` |
+| `--no-color` | `--noColor` |
+
+Example — override password at runtime without storing it:
+```bash
+ssh-cli exec prod "uptime" --password 'runtime-secret'
+ssh-cli sudo-exec prod "systemctl restart nginx" --sudoPassword 'sudo-secret'
+```
+
 ### Global Flags
 
 | Flag | Short | Purpose |
@@ -175,6 +209,40 @@ ssh-cli exec producao "hostname"
 | `ssh-cli tunnel <vps> <porta-local> <host-remoto> <porta-remota>` | Cria port-forward local via SSH |
 | `ssh-cli health-check [<vps>]` | Verifica conectividade SSH (usa VPS ativa se omitida) |
 | `ssh-cli completions <shell>` | Imprime completions de shell no stdout |
+
+### Flags de override em runtime
+
+Substitui credenciais armazenadas por invocação sem modificar o registro de VPSs.
+Estas flags prevalecem sobre os valores salvos com `vps add` ou `vps edit`.
+
+| Comando | Flag | Propósito |
+|---|---|---|
+| `exec` | `--password <SENHA>` | Substitui a senha SSH para esta invocação |
+| `exec` | `--timeout <MS>` | Substitui o timeout do comando em milissegundos |
+| `sudo-exec` | `--password <SENHA>` | Substitui a senha SSH |
+| `sudo-exec` | `--sudo-password <SENHA>` | Substitui a senha do sudo (alias: `--sudoPassword`) |
+| `sudo-exec` | `--timeout <MS>` | Substitui o timeout do comando em milissegundos |
+| `scp upload` | `--password <SENHA>` | Substitui a senha SSH |
+| `scp download` | `--password <SENHA>` | Substitui a senha SSH |
+| `tunnel` | `--password <SENHA>` | Substitui a senha SSH |
+| `health-check` | `--password <SENHA>` | Substitui a senha SSH |
+
+#### Aliases camelCase para LLMs
+
+Todas as flags com múltiplas palavras aceitam aliases camelCase para uso natural por LLMs:
+
+| Flag canônica | Alias camelCase |
+|---|---|
+| `--sudo-password` | `--sudoPassword` |
+| `--config-dir` | `--configDir` |
+| `--output-format` | `--outputFormat` |
+| `--no-color` | `--noColor` |
+
+Exemplo — substituir senha em runtime sem armazená-la:
+```bash
+ssh-cli exec producao "uptime" --password 'segredo-runtime'
+ssh-cli sudo-exec producao "systemctl restart nginx" --sudoPassword 'segredo-sudo'
+```
 
 ### Flags globais
 

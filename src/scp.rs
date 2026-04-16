@@ -5,12 +5,16 @@
 use crate::cli::AcaoScp;
 use crate::erros::ErroSshCli;
 use crate::output;
-use crate::ssh::cliente::{ClienteSsh, ClienteSshTrait, ConfiguracaoConexao};
+use crate::ssh::cliente::{ClienteSsh, ClienteSshTrait};
 use crate::vps;
 use std::path::PathBuf;
 
 /// Executa o subcomando SCP (upload/download).
-pub async fn executar_scp(acao: AcaoScp, config_override: Option<PathBuf>) -> anyhow::Result<()> {
+pub async fn executar_scp(
+    acao: AcaoScp,
+    config_override: Option<PathBuf>,
+    password_override: Option<String>,
+) -> anyhow::Result<()> {
     if crate::signals::cancelado() {
         return Err(anyhow::anyhow!(crate::i18n::t(
             crate::i18n::Mensagem::OperacaoCancelada
@@ -22,17 +26,16 @@ pub async fn executar_scp(acao: AcaoScp, config_override: Option<PathBuf>) -> an
             vps_nome,
             local,
             remote,
+            ..
         } => {
-            let registro = vps::buscar_por_nome(config_override.clone(), &vps_nome)?
+            let mut registro = vps::buscar_por_nome(config_override.clone(), &vps_nome)?
                 .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(vps_nome.clone()))?;
 
-            let cfg = ConfiguracaoConexao {
-                host: registro.host.clone(),
-                porta: registro.porta,
-                usuario: registro.usuario.clone(),
-                senha: registro.senha.clone(),
-                timeout_ms: registro.timeout_ms,
-            };
+            if let Some(pwd) = password_override {
+                registro.senha = secrecy::SecretString::from(pwd);
+            }
+
+            let cfg = crate::vps::construir_configuracao(&registro);
 
             let cliente: Box<dyn ClienteSshTrait> =
                 <ClienteSsh as ClienteSshTrait>::conectar(cfg).await?;
@@ -42,17 +45,16 @@ pub async fn executar_scp(acao: AcaoScp, config_override: Option<PathBuf>) -> an
             vps_nome,
             remote,
             local,
+            ..
         } => {
-            let registro = vps::buscar_por_nome(config_override.clone(), &vps_nome)?
+            let mut registro = vps::buscar_por_nome(config_override.clone(), &vps_nome)?
                 .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(vps_nome.clone()))?;
 
-            let cfg = ConfiguracaoConexao {
-                host: registro.host.clone(),
-                porta: registro.porta,
-                usuario: registro.usuario.clone(),
-                senha: registro.senha.clone(),
-                timeout_ms: registro.timeout_ms,
-            };
+            if let Some(pwd) = password_override {
+                registro.senha = secrecy::SecretString::from(pwd);
+            }
+
+            let cfg = crate::vps::construir_configuracao(&registro);
 
             let cliente: Box<dyn ClienteSshTrait> =
                 <ClienteSsh as ClienteSshTrait>::conectar(cfg).await?;
@@ -98,7 +100,9 @@ pub async fn executar_scp_download_with_client(
 mod testes {
     use super::*;
     use crate::erros::ErroSshCli;
-    use crate::ssh::cliente::{CanalTunel, SaidaExecucao, TransferenciaResultado};
+    use crate::ssh::cliente::{
+        CanalTunel, ConfiguracaoConexao, SaidaExecucao, TransferenciaResultado,
+    };
     use crate::vps::modelo::{VpsRegistro, SCHEMA_VERSION_ATUAL};
     use crate::vps::{self, ArquivoConfig};
     use async_trait::async_trait;
@@ -300,8 +304,10 @@ mod testes {
                 vps_nome: "vps-upload".to_string(),
                 local: tmp.path().join("arquivo-local.txt"),
                 remote: PathBuf::from("/tmp/arquivo-remoto.txt"),
+                password: None,
             },
             Some(tmp.path().to_path_buf()),
+            None,
         )
         .await;
 
@@ -319,8 +325,10 @@ mod testes {
                 vps_nome: "vps-download".to_string(),
                 remote: PathBuf::from("/tmp/arquivo-remoto.txt"),
                 local: tmp.path().join("arquivo-local.txt"),
+                password: None,
             },
             Some(tmp.path().to_path_buf()),
+            None,
         )
         .await;
 

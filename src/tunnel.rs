@@ -8,7 +8,7 @@
 
 use crate::erros::ErroSshCli;
 use crate::output;
-use crate::ssh::cliente::{ClienteSsh, ClienteSshTrait, ConfiguracaoConexao};
+use crate::ssh::cliente::{ClienteSsh, ClienteSshTrait};
 use crate::vps::buscar_por_nome;
 use anyhow::Result;
 use std::path::PathBuf;
@@ -24,17 +24,16 @@ pub async fn executar_tunnel(
     host_remoto: &str,
     porta_remota: u16,
     config_override: Option<PathBuf>,
+    password_override: Option<String>,
 ) -> Result<()> {
-    let vps = buscar_por_nome(config_override.clone(), vps_nome)?
+    let mut vps = buscar_por_nome(config_override.clone(), vps_nome)?
         .ok_or_else(|| ErroSshCli::VpsNaoEncontrada(vps_nome.to_string()))?;
 
-    let cfg = ConfiguracaoConexao {
-        host: vps.host.clone(),
-        porta: vps.porta,
-        usuario: vps.usuario.clone(),
-        senha: vps.senha.clone(),
-        timeout_ms: vps.timeout_ms,
-    };
+    if let Some(pwd) = password_override {
+        vps.senha = secrecy::SecretString::from(pwd);
+    }
+
+    let cfg = crate::vps::construir_configuracao(&vps);
 
     tracing::info!(
         vps = %vps_nome,

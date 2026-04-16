@@ -90,6 +90,14 @@ pub enum Comando {
         /// Saída em JSON.
         #[arg(long)]
         json: bool,
+
+        /// Override de senha SSH para esta execução.
+        #[arg(long)]
+        password: Option<String>,
+
+        /// Override de timeout em milissegundos.
+        #[arg(long)]
+        timeout: Option<u64>,
     },
 
     /// Executa um comando com `sudo` na VPS via SSH.
@@ -103,6 +111,18 @@ pub enum Comando {
         /// Saída em JSON.
         #[arg(long)]
         json: bool,
+
+        /// Override de senha SSH para esta execução.
+        #[arg(long)]
+        password: Option<String>,
+
+        /// Override de senha sudo para esta execução.
+        #[arg(long, alias = "sudoPassword", alias = "sudo_password")]
+        sudo_password: Option<String>,
+
+        /// Override de timeout em milissegundos.
+        #[arg(long)]
+        timeout: Option<u64>,
     },
 
     /// Transferência de arquivos via SCP (upload/download).
@@ -125,12 +145,20 @@ pub enum Comando {
 
         /// Porta remota (ex.: 5432).
         porta_remota: u16,
+
+        /// Override de senha SSH para este tunnel.
+        #[arg(long)]
+        password: Option<String>,
     },
 
     /// Verifica conectividade SSH com uma VPS.
     HealthCheck {
         /// Nome da VPS a verificar (usa VPS ativa se omitido).
         vps_nome: Option<String>,
+
+        /// Override de senha SSH para este health-check.
+        #[arg(long)]
+        password: Option<String>,
     },
 
     /// Gera completions de shell (bash, zsh, fish, powershell, elvish).
@@ -171,15 +199,15 @@ pub enum AcaoVps {
         timeout: u64,
 
         /// Limite de caracteres por output (`"none"` ou `"0"` = ilimitado).
-        #[arg(long, default_value = "100000")]
+        #[arg(long, default_value = "100000", alias = "maxChars")]
         max_chars: String,
 
         /// Senha para `sudo`.
-        #[arg(long)]
+        #[arg(long, alias = "sudoPassword", alias = "sudo_password")]
         sudo_password: Option<String>,
 
         /// Senha para `su -`.
-        #[arg(long)]
+        #[arg(long, alias = "suPassword", alias = "su_password")]
         su_password: Option<String>,
     },
 
@@ -222,15 +250,15 @@ pub enum AcaoVps {
         timeout: Option<u64>,
 
         /// Novo limite de caracteres.
-        #[arg(long)]
+        #[arg(long, alias = "maxChars")]
         max_chars: Option<String>,
 
         /// Nova senha sudo.
-        #[arg(long)]
+        #[arg(long, alias = "sudoPassword", alias = "sudo_password")]
         sudo_password: Option<String>,
 
         /// Nova senha su.
-        #[arg(long)]
+        #[arg(long, alias = "suPassword", alias = "su_password")]
         su_password: Option<String>,
     },
 
@@ -261,6 +289,10 @@ pub enum AcaoScp {
 
         /// Caminho destino no servidor remote.
         remote: PathBuf,
+
+        /// Override de senha SSH para esta transferência.
+        #[arg(long)]
+        password: Option<String>,
     },
 
     /// Download de arquivo remote para local.
@@ -273,6 +305,10 @@ pub enum AcaoScp {
 
         /// Caminho local de destino.
         local: PathBuf,
+
+        /// Override de senha SSH para esta transferência.
+        #[arg(long)]
+        password: Option<String>,
     },
 }
 
@@ -325,21 +361,54 @@ pub async fn executar(args: Argumentos) -> Result<()> {
             vps_nome,
             comando,
             json,
-        } => crate::vps::executar_exec(&vps_nome, &comando, config_override, formato, json).await,
+            password,
+            timeout,
+        } => {
+            crate::vps::executar_exec(
+                &vps_nome,
+                &comando,
+                config_override,
+                formato,
+                json,
+                password,
+                timeout,
+            )
+            .await
+        }
         Comando::SudoExec {
             vps_nome,
             comando,
             json,
+            password,
+            sudo_password,
+            timeout,
         } => {
-            crate::vps::executar_sudo_exec(&vps_nome, &comando, config_override, formato, json)
-                .await
+            crate::vps::executar_sudo_exec(
+                &vps_nome,
+                &comando,
+                config_override,
+                formato,
+                json,
+                password,
+                sudo_password,
+                timeout,
+            )
+            .await
         }
-        Comando::Scp { acao } => crate::scp::executar_scp(acao, config_override).await,
+        Comando::Scp { acao } => {
+            let pwd = match &acao {
+                AcaoScp::Upload { password, .. } | AcaoScp::Download { password, .. } => {
+                    password.clone()
+                }
+            };
+            crate::scp::executar_scp(acao, config_override, pwd).await
+        }
         Comando::Tunnel {
             vps_nome,
             porta_local,
             host_remoto,
             porta_remota,
+            password,
         } => {
             crate::tunnel::executar_tunnel(
                 &vps_nome,
@@ -347,11 +416,18 @@ pub async fn executar(args: Argumentos) -> Result<()> {
                 &host_remoto,
                 porta_remota,
                 config_override,
+                password,
             )
             .await
         }
-        Comando::HealthCheck { vps_nome } => {
-            crate::vps::executar_health_check(vps_nome.as_deref(), config_override, formato).await
+        Comando::HealthCheck { vps_nome, password } => {
+            crate::vps::executar_health_check(
+                vps_nome.as_deref(),
+                config_override,
+                formato,
+                password,
+            )
+            .await
         }
         Comando::Completions { shell } => {
             gerar_completions(shell);
@@ -391,6 +467,7 @@ mod testes {
                 porta_local,
                 host_remoto,
                 porta_remota,
+                ..
             } => {
                 assert_eq!(vps_nome, "vps-a");
                 assert_eq!(porta_local, 8080);
@@ -420,6 +497,7 @@ mod testes {
                         vps_nome,
                         local,
                         remote,
+                        ..
                     },
             } => {
                 assert_eq!(vps_nome, "vps-a");
@@ -493,6 +571,8 @@ mod testes {
                 vps_nome: "inexistente".to_string(),
                 comando: "echo ok".to_string(),
                 json: false,
+                password: None,
+                timeout: None,
             },
             Some(tmp.path().to_path_buf()),
         );
@@ -509,6 +589,9 @@ mod testes {
                 vps_nome: "inexistente".to_string(),
                 comando: "id".to_string(),
                 json: false,
+                password: None,
+                sudo_password: None,
+                timeout: None,
             },
             Some(tmp.path().to_path_buf()),
         );
@@ -526,6 +609,7 @@ mod testes {
                     vps_nome: "inexistente".to_string(),
                     local: PathBuf::from("./arquivo-local.txt"),
                     remote: PathBuf::from("/tmp/arquivo-remoto.txt"),
+                    password: None,
                 },
             },
             Some(tmp.path().to_path_buf()),
@@ -544,6 +628,7 @@ mod testes {
                 porta_local: 38080,
                 host_remoto: "127.0.0.1".to_string(),
                 porta_remota: 5432,
+                password: None,
             },
             Some(tmp.path().to_path_buf()),
         );
@@ -589,7 +674,7 @@ mod testes {
         let args = Argumentos::try_parse_from(["ssh-cli", "health-check", "meu-vps"])
             .expect("parser deve aceitar health-check com nome");
         match args.comando {
-            Comando::HealthCheck { vps_nome } => {
+            Comando::HealthCheck { vps_nome, .. } => {
                 assert_eq!(vps_nome, Some("meu-vps".to_string()));
             }
             outro => panic!("comando inesperado: {outro:?}"),
@@ -601,7 +686,7 @@ mod testes {
         let args = Argumentos::try_parse_from(["ssh-cli", "health-check"])
             .expect("parser deve aceitar health-check sem nome");
         match args.comando {
-            Comando::HealthCheck { vps_nome } => {
+            Comando::HealthCheck { vps_nome, .. } => {
                 assert!(vps_nome.is_none());
             }
             outro => panic!("comando inesperado: {outro:?}"),
@@ -617,10 +702,125 @@ mod testes {
                 vps_nome,
                 comando,
                 json,
+                ..
             } => {
                 assert_eq!(vps_nome, "vps1");
                 assert_eq!(comando, "ls");
                 assert!(json);
+            }
+            outro => panic!("comando inesperado: {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn exec_com_password_override() {
+        let args =
+            Argumentos::try_parse_from(["ssh-cli", "exec", "myvps", "ls", "--password", "abc123"])
+                .expect("parser deve aceitar exec com --password");
+        match args.comando {
+            Comando::Exec {
+                vps_nome, password, ..
+            } => {
+                assert_eq!(vps_nome, "myvps");
+                assert_eq!(password, Some("abc123".to_string()));
+            }
+            outro => panic!("comando inesperado: {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn exec_com_timeout_override() {
+        let args =
+            Argumentos::try_parse_from(["ssh-cli", "exec", "myvps", "ls", "--timeout", "5000"])
+                .expect("parser deve aceitar exec com --timeout");
+        match args.comando {
+            Comando::Exec {
+                vps_nome, timeout, ..
+            } => {
+                assert_eq!(vps_nome, "myvps");
+                assert_eq!(timeout, Some(5000u64));
+            }
+            outro => panic!("comando inesperado: {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn sudo_exec_com_sudo_password() {
+        let args = Argumentos::try_parse_from([
+            "ssh-cli",
+            "sudo-exec",
+            "myvps",
+            "apt update",
+            "--sudo-password",
+            "abc",
+        ])
+        .expect("parser deve aceitar sudo-exec com --sudo-password");
+        match args.comando {
+            Comando::SudoExec {
+                vps_nome,
+                sudo_password,
+                ..
+            } => {
+                assert_eq!(vps_nome, "myvps");
+                assert_eq!(sudo_password, Some("abc".to_string()));
+            }
+            outro => panic!("comando inesperado: {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn sudo_exec_alias_camelcase() {
+        let args = Argumentos::try_parse_from([
+            "ssh-cli",
+            "sudo-exec",
+            "myvps",
+            "apt update",
+            "--sudoPassword",
+            "abc",
+        ])
+        .expect("parser deve aceitar sudo-exec com --sudoPassword");
+        match args.comando {
+            Comando::SudoExec {
+                vps_nome,
+                sudo_password,
+                ..
+            } => {
+                assert_eq!(vps_nome, "myvps");
+                assert_eq!(sudo_password, Some("abc".to_string()));
+            }
+            outro => panic!("comando inesperado: {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn vps_add_alias_camelcase() {
+        let args = Argumentos::try_parse_from([
+            "ssh-cli",
+            "vps",
+            "add",
+            "--name",
+            "x",
+            "--host",
+            "1.2.3.4",
+            "--user",
+            "root",
+            "--sudoPassword",
+            "abc",
+            "--maxChars",
+            "5000",
+        ])
+        .expect("parser deve aceitar vps add com aliases camelCase");
+        match args.comando {
+            Comando::Vps {
+                acao:
+                    AcaoVps::Add {
+                        sudo_password,
+                        max_chars,
+                        ..
+                    },
+            } => {
+                assert_eq!(sudo_password, Some("abc".to_string()));
+                assert_eq!(max_chars, "5000");
             }
             outro => panic!("comando inesperado: {outro:?}"),
         }
