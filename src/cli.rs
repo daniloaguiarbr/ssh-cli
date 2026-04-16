@@ -222,6 +222,10 @@ pub enum AcaoVps {
     Remove {
         /// Nome da VPS a remover.
         nome: String,
+
+        /// Pula confirmação interativa (obrigatório em scripts e modo não-interativo).
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 
     /// Edita campos de uma VPS existente.

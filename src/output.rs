@@ -9,7 +9,7 @@ use crate::ssh::SaidaExecucao;
 use crate::vps::modelo::VpsRegistro;
 use secrecy::ExposeSecret;
 use serde_json::json;
-use std::io::{self, Write};
+use std::io::{self, BufRead, IsTerminal, Write};
 
 /// Escreve uma linha em stdout garantindo LF puro (nunca CRLF).
 ///
@@ -27,6 +27,54 @@ pub fn escrever_linha(conteudo: &str) -> io::Result<()> {
 /// Imprime mensagem de sucesso em texto para humanos.
 pub fn imprimir_sucesso(mensagem: &str) {
     println!("{mensagem}");
+}
+
+/// Indica se stdin está conectado a um terminal interativo (TTY).
+#[must_use]
+pub fn stdin_e_tty() -> bool {
+    io::stdin().is_terminal()
+}
+
+/// Versão pura e testável da leitura de confirmação `sim/não`.
+///
+/// Escreve `prompt` em `writer` e lê UMA linha de `reader`. Aceita como
+/// afirmativo: `s`, `S`, `sim`, `SIM`, `y`, `Y`, `yes`, `YES` (case-insensitive,
+/// com espaços em branco ao redor ignorados). Qualquer outra entrada — incluindo
+/// linha vazia ou EOF — é tratada como negativa.
+///
+/// # Erros
+/// Retorna erro se a escrita do prompt ou a leitura falharem.
+pub fn ler_confirmacao<R: BufRead, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+    prompt: &str,
+) -> io::Result<bool> {
+    writer.write_all(prompt.as_bytes())?;
+    writer.flush()?;
+    let mut linha = String::new();
+    let lidos = reader.read_line(&mut linha)?;
+    if lidos == 0 {
+        // EOF sem input = negativo (seguro para operação destrutiva).
+        return Ok(false);
+    }
+    let resposta = linha.trim().to_lowercase();
+    Ok(matches!(resposta.as_str(), "s" | "sim" | "y" | "yes"))
+}
+
+/// Emite `prompt` em stderr e lê a resposta de stdin.
+///
+/// Wrapper sobre [`ler_confirmacao`] usando stderr (para não poluir stdout em
+/// pipelines) e stdin real. Usado pelo handler de `vps remove` quando a flag
+/// `--yes` não foi passada e stdin está em modo TTY.
+///
+/// # Erros
+/// Retorna erro se o I/O falhar.
+pub fn perguntar_confirmacao(prompt: &str) -> io::Result<bool> {
+    let stdin = io::stdin();
+    let mut reader = stdin.lock();
+    let stderr = io::stderr();
+    let mut writer = stderr.lock();
+    ler_confirmacao(&mut reader, &mut writer, prompt)
 }
 
 /// Imprime mensagem de erro em stderr (para humanos).
@@ -521,6 +569,79 @@ mod testes {
         let intermediario = anyhow::Error::new(raiz).context("falha ao abrir socket");
         let topo = intermediario.context("falha ao inicializar conexão");
         imprimir_erro_generico(&topo);
+    }
+
+    #[test]
+    fn ler_confirmacao_aceita_s_minusculo() {
+        let input = b"s\n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "prompt: ").unwrap();
+        assert!(r);
+        assert_eq!(writer, b"prompt: ");
+    }
+
+    #[test]
+    fn ler_confirmacao_aceita_sim_maiusculo() {
+        let input = b"SIM\n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(r);
+    }
+
+    #[test]
+    fn ler_confirmacao_aceita_yes_com_espaco() {
+        let input = b"  yes  \n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(r);
+    }
+
+    #[test]
+    fn ler_confirmacao_aceita_y() {
+        let input = b"y\n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(r);
+    }
+
+    #[test]
+    fn ler_confirmacao_rejeita_n() {
+        let input = b"n\n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(!r);
+    }
+
+    #[test]
+    fn ler_confirmacao_rejeita_linha_vazia() {
+        let input = b"\n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(!r);
+    }
+
+    #[test]
+    fn ler_confirmacao_rejeita_eof() {
+        let input: &[u8] = b"";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(!r);
+    }
+
+    #[test]
+    fn ler_confirmacao_rejeita_texto_arbitrario() {
+        let input = b"talvez\n";
+        let mut reader: &[u8] = input;
+        let mut writer: Vec<u8> = Vec::new();
+        let r = ler_confirmacao(&mut reader, &mut writer, "p: ").unwrap();
+        assert!(!r);
     }
 
     #[test]

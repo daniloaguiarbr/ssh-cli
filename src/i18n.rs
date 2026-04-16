@@ -127,6 +127,15 @@ pub enum Mensagem {
     },
     /// Operação cancelada por sinal do usuário (Ctrl+C ou SIGTERM).
     OperacaoCancelada,
+    /// Pergunta de confirmação para remoção de VPS.
+    ConfirmarRemocaoVps {
+        /// Nome da VPS a ser removida.
+        nome: String,
+    },
+    /// Mensagem informando que a remoção foi cancelada pelo usuário.
+    RemocaoCancelada,
+    /// Erro exigindo flag `--yes` em modo não-interativo.
+    RemoveExigeYesEmNaoInterativo,
 }
 
 impl Mensagem {
@@ -214,6 +223,11 @@ fn en(msg: &Mensagem) -> String {
             format!("Health check OK for '{nome}' ({latencia_ms}ms)")
         }
         Mensagem::OperacaoCancelada => "Operation cancelled by user.".to_string(),
+        Mensagem::ConfirmarRemocaoVps { nome } => format!("Remove VPS '{nome}'? (y/N): "),
+        Mensagem::RemocaoCancelada => "Removal cancelled.".to_string(),
+        Mensagem::RemoveExigeYesEmNaoInterativo => {
+            "Non-interactive mode: use --yes (-y) to confirm removal.".to_string()
+        }
     }
 }
 
@@ -256,6 +270,11 @@ fn pt(msg: &Mensagem) -> String {
             format!("Health check OK para '{nome}' ({latencia_ms}ms)")
         }
         Mensagem::OperacaoCancelada => "Operação cancelada pelo usuário.".to_string(),
+        Mensagem::ConfirmarRemocaoVps { nome } => format!("Remover VPS '{nome}'? (s/N): "),
+        Mensagem::RemocaoCancelada => "Remoção cancelada.".to_string(),
+        Mensagem::RemoveExigeYesEmNaoInterativo => {
+            "Modo não-interativo: use --yes (-y) para confirmar remoção.".to_string()
+        }
     }
 }
 

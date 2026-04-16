@@ -76,6 +76,45 @@ fn inicializar_idioma_com_env_var_invalida_nao_panic() {
 }
 
 #[test]
+fn confirmar_remocao_vps_traduzida_em_ingles() {
+    let m = Mensagem::ConfirmarRemocaoVps {
+        nome: "alvo".to_string(),
+    };
+    let en = m.texto(Idioma::English);
+    assert!(en.contains("Remove"));
+    assert!(en.contains("alvo"));
+    assert!(en.contains("(y/N)"));
+}
+
+#[test]
+fn confirmar_remocao_vps_traduzida_em_portugues() {
+    let m = Mensagem::ConfirmarRemocaoVps {
+        nome: "alvo".to_string(),
+    };
+    let pt = m.texto(Idioma::Portugues);
+    assert!(pt.contains("Remover"));
+    assert!(pt.contains("alvo"));
+    assert!(pt.contains("(s/N)"));
+}
+
+#[test]
+fn remocao_cancelada_traduzida_bilingue() {
+    let m = Mensagem::RemocaoCancelada;
+    assert_eq!(m.texto(Idioma::English), "Removal cancelled.");
+    assert_eq!(m.texto(Idioma::Portugues), "Remoção cancelada.");
+}
+
+#[test]
+fn remove_exige_yes_em_nao_interativo_bilingue() {
+    let m = Mensagem::RemoveExigeYesEmNaoInterativo;
+    let en = m.texto(Idioma::English);
+    let pt = m.texto(Idioma::Portugues);
+    assert!(en.contains("--yes"));
+    assert!(pt.contains("--yes"));
+    assert_ne!(en, pt);
+}
+
+#[test]
 #[serial]
 fn idioma_atual_retorna_locale_valido() {
     inicializar_idioma(None).expect("inicializar_idioma não deve falhar");

@@ -188,7 +188,7 @@ fn testa_vps_remove_existente() {
         .success();
 
     cmd(&tmp)
-        .args(["vps", "remove", "remover"])
+        .args(["vps", "remove", "remover", "--yes"])
         .assert()
         .success()
         .stdout(predicate::str::contains("remover"));
@@ -199,9 +199,74 @@ fn testa_vps_remove_existente() {
 fn testa_vps_remove_inexistente_retorna_erro() {
     let tmp = TempDir::new().unwrap();
     cmd(&tmp)
-        .args(["vps", "remove", "nao-existe"])
+        .args(["vps", "remove", "nao-existe", "--yes"])
         .assert()
         .failure();
+}
+
+#[test]
+#[serial]
+fn testa_vps_remove_sem_yes_em_modo_nao_interativo_retorna_erro() {
+    let tmp = TempDir::new().unwrap();
+    cmd(&tmp)
+        .args([
+            "vps",
+            "add",
+            "--name",
+            "alvo",
+            "--host",
+            "a.example.com",
+            "--user",
+            "root",
+            "--password",
+            "senha-muito-longa-para-mascarar",
+        ])
+        .assert()
+        .success();
+
+    // Sem --yes e sem TTY (assert_cmd pipes stdin) deve falhar.
+    cmd(&tmp).args(["vps", "remove", "alvo"]).assert().failure();
+
+    // VPS ainda deve existir (não foi removida).
+    cmd(&tmp)
+        .args(["vps", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("alvo"));
+}
+
+#[test]
+#[serial]
+fn testa_vps_remove_com_yes_short_flag_remove_direto() {
+    let tmp = TempDir::new().unwrap();
+    cmd(&tmp)
+        .args([
+            "vps",
+            "add",
+            "--name",
+            "curto",
+            "--host",
+            "c.example.com",
+            "--user",
+            "root",
+            "--password",
+            "senha-muito-longa-para-mascarar",
+        ])
+        .assert()
+        .success();
+
+    cmd(&tmp)
+        .args(["vps", "remove", "curto", "-y"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("curto"));
+
+    // VPS NÃO deve mais existir.
+    cmd(&tmp)
+        .args(["vps", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("curto").not());
 }
 
 #[test]

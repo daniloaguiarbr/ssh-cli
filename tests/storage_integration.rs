@@ -178,7 +178,7 @@ fn remover_vps_existente() {
         .success();
 
     cmd(&tmp)
-        .args(["vps", "remove", "remover-teste"])
+        .args(["vps", "remove", "remover-teste", "--yes"])
         .assert()
         .success()
         .stdout(predicate::str::contains("removida"));
@@ -194,7 +194,7 @@ fn remover_vps_existente() {
 fn remover_vps_inexistente_retorna_erro() {
     let tmp = TempDir::new().unwrap();
     cmd(&tmp)
-        .args(["vps", "remove", "nao-existe-123"])
+        .args(["vps", "remove", "nao-existe-123", "--yes"])
         .assert()
         .failure();
 }

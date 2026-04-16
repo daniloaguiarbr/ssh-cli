@@ -19,7 +19,7 @@ jobs:
     name: cargo publish --dry-run
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo publish --dry-run --allow-dirty
 
@@ -56,7 +56,7 @@ jobs:
             cross: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -75,7 +75,7 @@ jobs:
           cross build --release --target ${{ matrix.target }}
           ${{ contains(matrix.target, '-musl') && '--features musl-allocator' || '' }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ssh-cli-${{ matrix.target }}
           path: |
@@ -87,11 +87,11 @@ jobs:
     needs: [build-matrix]
     runs-on: macos-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: ssh-cli-x86_64-apple-darwin
           path: intel
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: ssh-cli-aarch64-apple-darwin
           path: arm64
@@ -100,7 +100,7 @@ jobs:
           chmod +x intel/ssh-cli arm64/ssh-cli
           lipo -create -output ssh-cli-universal-apple-darwin intel/ssh-cli arm64/ssh-cli
           lipo -info ssh-cli-universal-apple-darwin
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: ssh-cli-universal-apple-darwin
           path: ssh-cli-universal-apple-darwin
@@ -113,8 +113,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           path: artifacts
       - name: Compute SHA256 checksums
@@ -135,7 +135,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - name: Verify package
         run: cargo package --verify

@@ -201,7 +201,25 @@ pub async fn executar_comando_vps(
                 crate::output::imprimir_lista_texto(&registros);
             }
         }
-        AcaoVps::Remove { nome } => {
+        AcaoVps::Remove { nome, yes } => {
+            if !yes {
+                if !output::stdin_e_tty() {
+                    return Err(ErroSshCli::ArgumentoInvalido(crate::i18n::t(
+                        crate::i18n::Mensagem::RemoveExigeYesEmNaoInterativo,
+                    ))
+                    .into());
+                }
+                let prompt = crate::i18n::t(crate::i18n::Mensagem::ConfirmarRemocaoVps {
+                    nome: nome.clone(),
+                });
+                let confirmado = output::perguntar_confirmacao(&prompt)?;
+                if !confirmado {
+                    output::imprimir_sucesso(&crate::i18n::t(
+                        crate::i18n::Mensagem::RemocaoCancelada,
+                    ));
+                    return Ok(());
+                }
+            }
             let mut arquivo = carregar(&caminho)?;
             if arquivo.hosts.remove(&nome).is_none() {
                 return Err(ErroSshCli::VpsNaoEncontrada(nome).into());

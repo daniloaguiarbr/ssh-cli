@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-04-16
+
+### Added
+- `vps remove` now requires an explicit confirmation step. In TTY mode the command prompts `Remove VPS 'name'? (y/N):` (or `(s/N):` in Portuguese) before deleting. The new `--yes` / `-y` flag bypasses the prompt for scripted use. Non-interactive invocations without `--yes` fail fast with a localized error asking for the flag — preventing accidental destruction in CI pipelines and pipes.
+- 3 new i18n variants (`ConfirmarRemocaoVps`, `RemocaoCancelada`, `RemoveExigeYesEmNaoInterativo`) in both English and Portuguese.
+- 2 new public functions in `output.rs`: `stdin_e_tty()` wrapping `IsTerminal`, and `ler_confirmacao` as a pure testable helper accepting `&mut impl BufRead + &mut impl Write` with 8 unit tests covering acceptance (`s`/`sim`/`y`/`yes` case-insensitive), rejection (`n`/empty/EOF/arbitrary text), and trimming.
+- 6 new regression tests: 2 E2E in `tests/e2e_cli.rs` (--yes short/long flag, non-interactive error), 4 in `tests/i18n_integration.rs` (confirmation prompt bilingual, cancellation bilingual, non-interactive error bilingual).
+
+### Changed
+- CI and release workflows upgraded from `actions/checkout@v4` / `actions/upload-artifact@v4` / `actions/download-artifact@v4` to their `@v5` counterparts (Node.js 24 native). Prevents forced migration warnings starting June 2026 and prepares for the October 2026 runner removal.
+- 21 action reference updates across `.github/workflows/ci.yml` (12 `checkout`) and `.github/workflows/release.yml` (4 `checkout` + 2 `upload-artifact` + 3 `download-artifact`).
+
+### Fixed
+- `ssh-cli vps remove <name>` no longer silently removes the VPS without confirmation in interactive terminals.
+
 ## [0.3.1] - 2026-04-16
 
 ### Fixed
@@ -84,7 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config file receives `chmod 0o600` immediately after every write on Unix.
 - `SSH_CLI_HOME` rejects any value containing `..` to prevent path traversal attacks.
 
-[Unreleased]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/daniloaguiarbr/ssh-cli/compare/v0.2.0...v0.2.1
